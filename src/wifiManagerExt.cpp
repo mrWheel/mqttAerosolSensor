@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:03 ***/
 #include "wifiManagerExt.h"
 #include "logger.h"
 #include <WiFi.h>
@@ -17,14 +17,7 @@ void WifiManagerExt::initMacAddress()
   //-- Format last 2 bytes as hex string (4 characters) for mDNS and AP names
   snprintf(macSuffixShort, sizeof(macSuffixShort), "%02x%02x", mac[4], mac[5]);
 
-  //-- Generate clientId based on device type
-#if defined(DEVICE_LUCHTSENSOR)
   snprintf(clientId, sizeof(clientId), "LS%s", macSuffix);
-#elif defined(DEVICE_VENTILATORREGELAAR)
-  snprintf(clientId, sizeof(clientId), "VR%s", macSuffix);
-#else
-  snprintf(clientId, sizeof(clientId), "UN%s", macSuffix);
-#endif
 
   Logger::info("MAC Address: %02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
   Logger::info("MAC Suffix (full): %s", macSuffix);
@@ -38,13 +31,7 @@ void WifiManagerExt::startMDNS()
   //-- Create mDNS hostname based on device type and short MAC suffix
   char hostname[32];
 
-#if defined(DEVICE_LUCHTSENSOR)
   snprintf(hostname, sizeof(hostname), "sensor-%s", macSuffixShort);
-#elif defined(DEVICE_VENTILATORREGELAAR)
-  snprintf(hostname, sizeof(hostname), "ventilator-%s", macSuffixShort);
-#else
-  snprintf(hostname, sizeof(hostname), "esp32-%s", macSuffixShort);
-#endif
 
   if (MDNS.begin(hostname))
   {
@@ -90,24 +77,28 @@ bool WifiManagerExt::begin(MqttConfig& config, int resetButtonPin)
   Logger::info("  Port: '%s'", config.port());
   Logger::info("  User: '%s'", config.user());
   Logger::info("  Pass: '%s'", config.pass());
+  Logger::info("  Topic: '%s'", config.topic());
 
   //-- Copy values to stable buffers for WiFiManager
   char hostBuffer[41] = {0};
   char portBuffer[7] = {0};
   char userBuffer[33] = {0};
   char passBuffer[33] = {0};
+  char topicBuffer[65] = {0};
   char intervalBuffer[7] = {0};
 
   strncpy(hostBuffer, config.host(), 40);
   strncpy(portBuffer, config.port(), 6);
   strncpy(userBuffer, config.user(), 32);
   strncpy(passBuffer, config.pass(), 32);
+  strncpy(topicBuffer, config.topic(), 64);
   strncpy(intervalBuffer, config.measurementIntervalSec(), 6);
 
   WiFiManagerParameter hostParam("host", "MQTT Host", hostBuffer, 40);
   WiFiManagerParameter portParam("port", "MQTT Port", portBuffer, 6);
   WiFiManagerParameter userParam("user", "MQTT User", userBuffer, 32);
   WiFiManagerParameter passParam("pass", "MQTT Password", passBuffer, 32);
+  WiFiManagerParameter topicParam("topic", "MQTT Topic", topicBuffer, 64);
   WiFiManagerParameter intervalParam("interval", "Measurement Interval (sec)", intervalBuffer, 6);
 
   Logger::info("Created WiFiManager parameters with values from config");
@@ -117,6 +108,7 @@ bool WifiManagerExt::begin(MqttConfig& config, int resetButtonPin)
   manager.addParameter(&portParam);
   manager.addParameter(&userParam);
   manager.addParameter(&passParam);
+  manager.addParameter(&topicParam);
   manager.addParameter(&intervalParam);
 
   //-- Set non-blocking mode to allow button checking
@@ -125,13 +117,7 @@ bool WifiManagerExt::begin(MqttConfig& config, int resetButtonPin)
 
   //-- Create AP name with short MAC suffix
   char apName[32];
-#if defined(DEVICE_LUCHTSENSOR)
   snprintf(apName, sizeof(apName), "sensor-%s", macSuffixShort);
-#elif defined(DEVICE_VENTILATORREGELAAR)
-  snprintf(apName, sizeof(apName), "ventilator-%s", macSuffixShort);
-#else
-  snprintf(apName, sizeof(apName), "esp32-%s", macSuffixShort);
-#endif
 
   Logger::info("WiFi AP name: %s", apName);
 
@@ -208,6 +194,7 @@ bool WifiManagerExt::begin(MqttConfig& config, int resetButtonPin)
   const char* newPort = portParam.getValue();
   const char* newUser = userParam.getValue();
   const char* newPass = passParam.getValue();
+  const char* newTopic = topicParam.getValue();
   const char* newInterval = intervalParam.getValue();
 
   if (newHost != nullptr && strlen(newHost) > 0)
@@ -229,6 +216,11 @@ bool WifiManagerExt::begin(MqttConfig& config, int resetButtonPin)
   if (newPass != nullptr)
   {
     config.setPass(newPass);
+  }
+
+  if (newTopic != nullptr && strlen(newTopic) > 0)
+  {
+    config.setTopic(newTopic);
   }
 
   if (newInterval != nullptr && strlen(newInterval) > 0)
@@ -286,18 +278,21 @@ void WifiManagerExt::startPortal(MqttConfig& config)
   char portBuffer[7] = {0};
   char userBuffer[33] = {0};
   char passBuffer[33] = {0};
+  char topicBuffer[65] = {0};
   char intervalBuffer[7] = {0};
 
   strncpy(hostBuffer, config.host(), 40);
   strncpy(portBuffer, config.port(), 6);
   strncpy(userBuffer, config.user(), 32);
   strncpy(passBuffer, config.pass(), 32);
+  strncpy(topicBuffer, config.topic(), 64);
   strncpy(intervalBuffer, config.measurementIntervalSec(), 6);
 
   WiFiManagerParameter hostParam("host", "MQTT Host", hostBuffer, 40);
   WiFiManagerParameter portParam("port", "MQTT Port", portBuffer, 6);
   WiFiManagerParameter userParam("user", "MQTT User", userBuffer, 32);
   WiFiManagerParameter passParam("pass", "MQTT Password", passBuffer, 32);
+  WiFiManagerParameter topicParam("topic", "MQTT Topic", topicBuffer, 64);
   WiFiManagerParameter intervalParam("interval", "Measurement Interval (sec)", intervalBuffer, 6);
 
   WiFiManager manager;
@@ -305,6 +300,7 @@ void WifiManagerExt::startPortal(MqttConfig& config)
   manager.addParameter(&portParam);
   manager.addParameter(&userParam);
   manager.addParameter(&passParam);
+  manager.addParameter(&topicParam);
   manager.addParameter(&intervalParam);
 
   //-- Start blocking portal
@@ -313,13 +309,7 @@ void WifiManagerExt::startPortal(MqttConfig& config)
 
   //-- Create AP name with short MAC suffix
   char apName[32];
-#if defined(DEVICE_LUCHTSENSOR)
   snprintf(apName, sizeof(apName), "sensor-%s", macSuffixShort);
-#elif defined(DEVICE_VENTILATORREGELAAR)
-  snprintf(apName, sizeof(apName), "ventilator-%s", macSuffixShort);
-#else
-  snprintf(apName, sizeof(apName), "esp32-%s", macSuffixShort);
-#endif
 
   Logger::info("WiFi AP name: %s", apName);
 
@@ -334,6 +324,7 @@ void WifiManagerExt::startPortal(MqttConfig& config)
   const char* newPort = portParam.getValue();
   const char* newUser = userParam.getValue();
   const char* newPass = passParam.getValue();
+  const char* newTopic = topicParam.getValue();
   const char* newInterval = intervalParam.getValue();
 
   if (newHost != nullptr && strlen(newHost) > 0)
@@ -355,6 +346,11 @@ void WifiManagerExt::startPortal(MqttConfig& config)
   if (newPass != nullptr)
   {
     config.setPass(newPass);
+  }
+
+  if (newTopic != nullptr && strlen(newTopic) > 0)
+  {
+    config.setTopic(newTopic);
   }
 
   if (newInterval != nullptr && strlen(newInterval) > 0)
@@ -392,6 +388,11 @@ void WifiManagerExt::loadFromFile(MqttConfig& config)
     config.setPort(doc["port"] | "1883");
     config.setUser(doc["user"] | "");
     config.setPass(doc["pass"] | "");
+#ifdef TOPIC_DATA
+    config.setTopic(doc["topic"] | TOPIC_DATA);
+#else
+    config.setTopic(doc["topic"] | "luchtsensor/data");
+#endif
     config.setMeasurementIntervalSec(doc["interval"] | "120");
 
     Logger::info("Loaded config.json contents:");
@@ -399,6 +400,11 @@ void WifiManagerExt::loadFromFile(MqttConfig& config)
     Logger::info("  port: '%s'", doc["port"] | "1883");
     Logger::info("  user: '%s'", doc["user"] | "");
     Logger::info("  pass: '%s'", doc["pass"] | "");
+#ifdef TOPIC_DATA
+    Logger::info("  topic: '%s'", doc["topic"] | TOPIC_DATA);
+#else
+    Logger::info("  topic: '%s'", doc["topic"] | "luchtsensor/data");
+#endif
     Logger::info("  interval: '%s'", doc["interval"] | "120");
   }
 
@@ -414,6 +420,7 @@ void WifiManagerExt::saveToFile(const MqttConfig& config)
   doc["port"] = config.port();
   doc["user"] = config.user();
   doc["pass"] = config.pass();
+  doc["topic"] = config.topic();
   doc["interval"] = config.measurementIntervalSec();
 
   File file = LittleFS.open("/config.json", "w");

@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:03 ***/
 #pragma once
 #include <Arduino.h>
 #include <string>
@@ -12,12 +12,14 @@ public:
   const char* port() const;
   const char* user() const;
   const char* pass() const;
+  const char* topic() const;
   const char* measurementIntervalSec() const;
 
   void setHost(const std::string& value);
   void setPort(const std::string& value);
   void setUser(const std::string& value);
   void setPass(const std::string& value);
+  void setTopic(const std::string& value);
   void setMeasurementIntervalSec(const std::string& value);
 
 private:
@@ -25,5 +27,6 @@ private:
   std::string mqttPort;
   std::string mqttUser;
   std::string mqttPass;
+  std::string mqttTopic;
   std::string mqttMeasurementIntervalSec;
 };

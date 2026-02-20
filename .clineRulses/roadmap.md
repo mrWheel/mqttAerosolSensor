@@ -32,7 +32,7 @@ De code:
 ```
 [platformio]
 workspace_dir = .pio.nosync
-default_envs = luchtSensor
+default_envs = mqttAerosolSensor
 
 [env]
 platform = espressif32
@@ -49,9 +49,8 @@ lib_deps =
     bblanchon/ArduinoJson @ ^7.0.4
     https://github.com/fu-hsi/PMS.git
 
-[env:luchtSensor]
+[env:mqttAerosolSensor]
 build_flags =
-    -DDEVICE_LUCHTSENSOR
     -DPIN_PM_RX=16
     -DPIN_PM_TX=17
     -DPIN_PM_ENABLE=4
@@ -62,21 +61,21 @@ build_flags =
     -DLOG_LEVEL=LOG_LEVEL_DEBUG
 ```
 
-Gebruik: `pio run -e luchtSensor`
+Gebruik: `pio run -e mqttAerosolSensor`
 
 ---
 
 ## 🔹 Mappenstructuur
 
 ```
-luchtSensor/
+mqttAerosolSensor/
 ├── platformio.ini              # PlatformIO configuratie
 ├── .gitignore                  # Git exclusions
 ├── DOCUMENTATION.md            # Projectdocumentatie
 ├── roadmap.md                  # Dit bestand
 │
 ├── include/                    # Gedeelde code
-│   ├── airSensor.h             # Fijnstofsensor wrapper (PMSerial)
+│   ├── pms5003AirSensor.h      # Fijnstofsensor wrapper (PMSerial)
 │   ├── logger.h                # Centrale logging utility
 │   ├── mqttClient.h            # MQTT client wrapper (PubSubClient)
 │   ├── mqttConfig.h            # MQTT configuratie storage
@@ -84,7 +83,7 @@ luchtSensor/
 │
 ├── src/                    
 │   ├── main.cpp                # Hoofd programma
-│   ├── airSensor.cpp           # Fijnstofsensor wrapper (PMSerial)
+│   ├── pms5003AirSensor.cpp    # Fijnstofsensor wrapper (PMSerial)
 │   ├── logger.cpp              # Centrale logging utility
 │   ├── mqttClient.cpp          # MQTT client wrapper (PubSubClient)
 │   ├── mqttConfig.cpp          # MQTT configuratie storage

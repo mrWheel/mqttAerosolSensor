@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:03 ***/
 #include <Arduino.h>
 #include <string>
 #include <cstring>
@@ -9,7 +9,7 @@
 #include "logger.h"
 #include "telnetServer.h"
 
-const char* PROG_VERSION = "v0.9.0";
+const char* PROG_VERSION = "v0.9.1";
 
 WifiManagerExt wifiManager;
 MqttConfig mqttConfig;
@@ -64,6 +64,7 @@ static void saveConfigToFile()
   doc["port"] = mqttConfig.port();
   doc["user"] = mqttConfig.user();
   doc["pass"] = mqttConfig.pass();
+  doc["topic"] = mqttConfig.topic();
   doc["interval"] = mqttConfig.measurementIntervalSec();
 
   File file = LittleFS.open("/config.json", "w");
@@ -124,6 +125,7 @@ void handleSerialCommand(const std::string& command)
     Serial.printf("  Port: %s\n", mqttConfig.port());
     Serial.printf("  User: %s\n", mqttConfig.user());
     Serial.printf("  Pass: %s\n", mqttConfig.pass());
+    Serial.printf("  Topic: %s\n", mqttConfig.topic());
     Serial.printf("  Interval: %s sec\n", mqttConfig.measurementIntervalSec());
     Serial.println();
 
@@ -397,8 +399,9 @@ void taskMeasurement(void* pvParameters)
         doc["pm10"] = pm10Value;
         doc["timestamp"] = millis();
 
-        mqttClientInstance->publishJson(TOPIC_DATA, doc);
-        Logger::info("Published luchtsensor/data");
+        const char* mqttTopic = mqttConfig.topic();
+        mqttClientInstance->publishJson(mqttTopic, doc);
+        Logger::info("Published %s", mqttTopic);
         Logger::info("  Device ID: %s", wifiManager.getClientId());
         Logger::info("  PM2.5: %.0f µg/m³", pm25Value);
         Logger::info("  PM10 : %.0f µg/m³", pm10Value);

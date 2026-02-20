@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:03 ***/
 #include "mqttConfig.h"
 
 //-- Constructor: Initialize MQTT configuration with default values
@@ -7,6 +7,11 @@ MqttConfig::MqttConfig()
       mqttPort("1883"),
       mqttUser(""),
       mqttPass(""),
+#ifdef TOPIC_DATA
+      mqttTopic(TOPIC_DATA),
+#else
+      mqttTopic("luchtsensor/data"),
+#endif
       mqttMeasurementIntervalSec("120")
 {
 }
@@ -33,6 +38,12 @@ const char* MqttConfig::user() const
 const char* MqttConfig::pass() const
 {
   return mqttPass.c_str();
+}
+
+//-- Get MQTT topic as C-string
+const char* MqttConfig::topic() const
+{
+  return mqttTopic.c_str();
 }
 
 //-- Get measurement interval in seconds as C-string
@@ -63,6 +74,12 @@ void MqttConfig::setUser(const std::string& value)
 void MqttConfig::setPass(const std::string& value)
 {
   mqttPass = value;
+}
+
+//-- Set MQTT topic
+void MqttConfig::setTopic(const std::string& value)
+{
+  mqttTopic = value;
 }
 
 //-- Set measurement interval in seconds
