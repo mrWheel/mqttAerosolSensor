@@ -1,0 +1,20 @@
+┌────────────────────┐
+│    MQTT Broker     │
+└────────┬───────────┘
+         │
+ ┌───────┴────────────────────────────────┐
+ │                                        │
+ ▼                                        ▼
+┌─────────────────-───┐            ┌────────────────────────┐
+│   Luchtsensor       │            │   Ventilatorregelaar   │
+│   (ESP32-Dev)       │            │   (ESP32-Dev)          │
+│─────────────────-───│            │────────────────────────│
+│  WiFiManagerExt     │            │  WiFiManagerExt        │
+│  MqttClient         │            │  MqttClient            │
+│  AirSensor(PMSerial)│            │  StepperMotor          │
+│───────────────────-─│            │────────────────────────│
+│ Publishes:          │            │ Publishes:             │
+│  - luchtsensor/data │            │  - ventilator/status   │
+│                     │            │ Subscribes:            │
+│                     │            │  - ventilator/command  │
+└──────────────────-──┘            └────────────────────────┘

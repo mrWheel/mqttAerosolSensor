@@ -1,0 +1,44 @@
+mqtt:
+  sensor:
+    - name: "Luchtsensor PM2.5"
+      unique_id: luchtsensor_pm25
+      state_topic: "luchtsensor/data"
+      unit_of_measurement: "µg/m³"
+      value_template: "{{ value_json.pm25 }}"
+      device_class: pm25
+      state_class: measurement
+
+    - name: "Luchtsensor PM10"
+      unique_id: luchtsensor_pm10
+      state_topic: "luchtsensor/data"
+      unit_of_measurement: "µg/m³"
+      value_template: "{{ value_json.pm10 }}"
+      device_class: pm10
+      state_class: measurement
+
+  switch:
+    - name: "Ventilator Aan/Uit"
+      unique_id: ventilator_power
+      command_topic: "ventilator/command"
+      state_topic: "ventilator/status"
+      value_template: "{{ value_json.power }}"
+      payload_on: '{"power": true}'
+      payload_off: '{"power": false}'
+      optimistic: false
+      retain: false
+      icon: mdi:fan
+
+  number:
+    - name: "Ventilator Snelheid"
+      unique_id: ventilator_speed
+      command_topic: "ventilator/command"
+      state_topic: "ventilator/status"
+      unit_of_measurement: "steps/s"
+      min: 100
+      max: 1000
+      step: 50
+      mode: slider
+      value_template: "{{ value_json.speed }}"
+      command_template: >
+        {"speed": {{ value }} }
+      icon: mdi:speedometer
