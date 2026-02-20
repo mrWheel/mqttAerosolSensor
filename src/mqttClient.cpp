@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include "mqttClient.h"
 #include "logger.h"
 
@@ -33,6 +33,7 @@ bool MqttClient::connect(const std::string& clientId, int maxRetries, std::funct
     attempts++;
     Logger::info("MQTT connection attempt %d/%d", attempts, maxRetries);
     Logger::info("      host: [%s] on [%s]", config.host(), config.port());
+    Logger::info("     topic: [%s]", config.topic());
     Logger::info("  clientId: [%s]", clientId.c_str());
     Logger::info("      user: [%s]", config.user());
 

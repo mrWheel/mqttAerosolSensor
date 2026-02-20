@@ -118,7 +118,7 @@ Header (.h) files voor herbruikbare modules:
 - `wakeUp()`: Stuur wakeup commando naar sensor
 - `sleep()`: Zet sensor in sleep mode voor stroomverbruik besparing
 - `read()`: Lees sensor data met 5 seconden timeout en RTOS-friendly polling
-- `pm25()`, `pm10()`: Haal laatste gemeten waardes op
+- `pm1()`, `pm25()`, `pm10()`: Haal laatste gemeten waardes op
 - `getLastData()`: Verkrijg complete PMS::DATA structuur
 
 **Hardware pins:**

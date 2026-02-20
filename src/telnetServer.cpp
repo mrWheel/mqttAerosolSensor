@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include "telnetServer.h"
 #include <cstring>
 #include <cstdarg>
@@ -226,9 +226,12 @@ void TelnetServer::processCommand(const std::string& command)
   if (command == "help")
   {
     client.println("\r\nAvailable commands:");
-    client.println("  help   - Show this help message");
-    client.println("  status - Show device status");
-    client.println("  clear  - Clear screen");
+    client.println("  help       - Show this help message");
+    client.println("  status     - Show device status");
+    client.println("  config     - Show current MQTT configuration");
+    client.println("  clear      - Clear screen");
+    client.println("  clearauth  - Clear MQTT username/password (for anonymous connection)");
+    client.println("  restart    - Restart the device");
     client.println("");
   }
   else if (command == "clear")

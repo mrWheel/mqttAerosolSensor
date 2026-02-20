@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 13:03 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include <Arduino.h>
 #include <string>
 #include <cstring>
@@ -9,7 +9,7 @@
 #include "logger.h"
 #include "telnetServer.h"
 
-const char* PROG_VERSION = "v0.9.1";
+const char* PROG_VERSION = "v1.0.0";
 
 WifiManagerExt wifiManager;
 MqttConfig mqttConfig;
@@ -177,25 +177,56 @@ void handleSerialCommand(const std::string& command)
   }
 } //  handleSerialCommand()
 
-//-- RTOS task: Monitor reset button during first 60 seconds after boot
+//-- RTOS task: Continuously monitor reset button for long press
 void taskButtonMonitor(void* pvParameters)
 {
-  unsigned long start = millis();
+  const unsigned long longPressMs = 10000UL;
+  bool wasPressed = false;
+  unsigned long pressedAt = 0;
+  unsigned long lastReportedSecond = 0;
 
   while (true)
   {
-    if (millis() - start <= 60000UL)
+    unsigned long now = millis();
+    bool isPressed = (digitalRead(PIN_ERASE_WIFI) == LOW);
+
+    if (isPressed)
     {
-      if (digitalRead(PIN_ERASE_WIFI) == LOW)
+      if (!wasPressed)
       {
-        Logger::warn("Reset button pressed in first 60s, clearing WiFi and restarting");
+        wasPressed = true;
+        pressedAt = now;
+        lastReportedSecond = 0;
+        Logger::info("Reset button LOW detected, starting hold timer");
+      }
+
+      unsigned long heldMs = now - pressedAt;
+      unsigned long heldSeconds = heldMs / 1000UL;
+
+      if (heldSeconds != lastReportedSecond)
+      {
+        lastReportedSecond = heldSeconds;
+        Logger::info("Reset button held for %lu s", heldSeconds);
+      }
+
+      if (heldMs >= longPressMs)
+      {
+        Logger::warn("Reset button held >= 10 seconds, clearing WiFi credentials and restarting");
         wifiManager.reset();
         vTaskDelay(500 / portTICK_PERIOD_MS);
         ESP.restart();
       }
     }
+    else if (wasPressed)
+    {
+      unsigned long heldMs = now - pressedAt;
+      Logger::info("Reset button HIGH detected (released) after %lu ms", heldMs);
+      wasPressed = false;
+      pressedAt = 0;
+      lastReportedSecond = 0;
+    }
 
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+    vTaskDelay(100 / portTICK_PERIOD_MS);
   }
 }
 
@@ -368,6 +399,7 @@ void taskMeasurement(void* pvParameters)
     {
       framesOk++;
 
+      float pm1Value = airSensor.pm1();
       float pm25Value = airSensor.pm25();
       float pm10Value = airSensor.pm10();
 
@@ -394,7 +426,8 @@ void taskMeasurement(void* pvParameters)
       if (mqttClientInstance != nullptr)
       {
         JsonDocument doc;
-        doc["deviceId"] = wifiManager.getClientId();
+        doc["devId"] = wifiManager.getClientId();
+        doc["pm1"] = pm1Value;
         doc["pm25"] = pm25Value;
         doc["pm10"] = pm10Value;
         doc["timestamp"] = millis();
@@ -403,6 +436,7 @@ void taskMeasurement(void* pvParameters)
         mqttClientInstance->publishJson(mqttTopic, doc);
         Logger::info("Published %s", mqttTopic);
         Logger::info("  Device ID: %s", wifiManager.getClientId());
+        Logger::info("  PM1.0: %.0f µg/m³", pm1Value);
         Logger::info("  PM2.5: %.0f µg/m³", pm25Value);
         Logger::info("  PM10 : %.0f µg/m³", pm10Value);
       }
@@ -434,6 +468,7 @@ void handleTelnetCommand(const std::string& command)
 
     if (valid)
     {
+      telnetServer.printf("  PM1.0: %.0f µg/m³\r\n", airSensor.pm1());
       telnetServer.printf("  PM2.5: %.0f µg/m³\r\n", airSensor.pm25());
       telnetServer.printf("  PM10 : %.0f µg/m³\r\n", airSensor.pm10());
     }
@@ -451,6 +486,7 @@ void handleTelnetCommand(const std::string& command)
     telnetServer.printf("  Port: %s\r\n", mqttConfig.port());
     telnetServer.printf("  User: %s\r\n", mqttConfig.user());
     telnetServer.printf("  Pass: %s\r\n", mqttConfig.pass());
+    telnetServer.printf("  Topic: %s\r\n", mqttConfig.topic());
     telnetServer.printf("  Interval: %s sec\r\n", mqttConfig.measurementIntervalSec());
     telnetServer.println("");
   }
@@ -665,7 +701,7 @@ void setup()
       "ButtonMonitor",
       4096,
       nullptr,
-      2,
+      0,
       nullptr,
       0);
 
@@ -678,16 +714,6 @@ void setup()
       1,
       nullptr,
       0);
-
-  /***
-    xTaskCreate(
-        taskMeasurement,
-        "Measurement",
-        4096,
-        nullptr,
-        1,
-        nullptr);
-  ***/
 
   xTaskCreatePinnedToCore(
       taskMeasurement,

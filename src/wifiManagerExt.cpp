@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 13:03 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include "wifiManagerExt.h"
 #include "logger.h"
 #include <WiFi.h>
@@ -391,7 +391,7 @@ void WifiManagerExt::loadFromFile(MqttConfig& config)
 #ifdef TOPIC_DATA
     config.setTopic(doc["topic"] | TOPIC_DATA);
 #else
-    config.setTopic(doc["topic"] | "luchtsensor/data");
+    config.setTopic(doc["topic"] | "pms5003/data");
 #endif
     config.setMeasurementIntervalSec(doc["interval"] | "120");
 
@@ -403,7 +403,7 @@ void WifiManagerExt::loadFromFile(MqttConfig& config)
 #ifdef TOPIC_DATA
     Logger::info("  topic: '%s'", doc["topic"] | TOPIC_DATA);
 #else
-    Logger::info("  topic: '%s'", doc["topic"] | "luchtsensor/data");
+    Logger::info("  topic: '%s'", doc["topic"] | "pms5003/data");
 #endif
     Logger::info("  interval: '%s'", doc["interval"] | "120");
   }

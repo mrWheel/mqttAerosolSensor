@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 12:27 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #pragma once
 #include <Arduino.h>
 #include <HardwareSerial.h>
@@ -19,6 +19,7 @@ public:
   void wakeUp();
   void sleep();
   bool read();
+  float pm1() const;
   float pm25() const;
   float pm10() const;
   PMS::DATA getLastData() const;

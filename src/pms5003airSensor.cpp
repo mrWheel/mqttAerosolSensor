@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 13:03 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include "pms5003AirSensor.h"
 #include "logger.h"
 
@@ -67,7 +67,7 @@ bool AirSensor::read()
   {
     if (pms.read(pmsData))
     {
-      Logger::info("AirSensor: PM2.5=%u, PM10=%u", pmsData.PM_AE_UG_2_5, pmsData.PM_AE_UG_10_0);
+      Logger::info("AirSensor: PM1.0=%u, PM2.5=%u, PM10=%u", pmsData.PM_AE_UG_2_5, pmsData.PM_AE_UG_10_0);
       return true;
     }
 
@@ -76,7 +76,13 @@ bool AirSensor::read()
   }
 
   Logger::warn("AirSensor: read() timeout after %lu ms", timeout);
-  return true;
+  return false;
+}
+
+//-- Get last read PM1.0 value (atmospheric environment, µg/m³)
+float AirSensor::pm1() const
+{
+  return (float)pmsData.PM_AE_UG_1_0;
 }
 
 //-- Get last read PM2.5 value (atmospheric environment, µg/m³)

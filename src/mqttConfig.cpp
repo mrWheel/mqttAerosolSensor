@@ -1,4 +1,4 @@
-/*** Last Changed: 2026-02-20 - 13:03 ***/
+/*** Last Changed: 2026-02-20 - 13:57 ***/
 #include "mqttConfig.h"
 
 //-- Constructor: Initialize MQTT configuration with default values
@@ -10,7 +10,7 @@ MqttConfig::MqttConfig()
 #ifdef TOPIC_DATA
       mqttTopic(TOPIC_DATA),
 #else
-      mqttTopic("luchtsensor/data"),
+      mqttTopic("pms5003/data"),
 #endif
       mqttMeasurementIntervalSec("120")
 {
