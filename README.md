@@ -104,9 +104,9 @@ MQTT client wrapper:
 - Built on PubSubClient library
 
 #### Air Sensor
-- Measures PM2.5, PM10 concentrations
+- Measures PM1.0, PM2.5, PM10 concentrations
 - Configurable measurement interval (default: 2 minutes)
-- Publishes to `luchtsensor/data` topic
+- Publishes to `pms5003/data` topic
 - **PIN_ERASE_WIFI** clears credentials within 20 seconds of boot
 
 ## Getting Started
@@ -123,21 +123,21 @@ The project uses environment-specific builds. Never build the default environmen
 
 ```bash
 # Build air sensor firmware
-pio run -e luchtsensor
+pio run -e mqttAerosolSensor
 ```
 
 ### Uploading
 
 ```bash
 # Upload air sensor
-pio run -e luchtsensor --target upload
+pio run -e mqttAerosolSensor --target upload
 ```
 
 ### Monitoring
 
 ```bash
 # Monitor serial output (115200 baud)
-pio device monitor -e luchtsensor
+pio device monitor -e mqttAerosolSensor
 ```
 
 ## Configuration
@@ -156,6 +156,7 @@ Connect to the device's WiFi AP and navigate to the portal to configure:
 - **WiFi SSID and password**
 - **MQTT broker host** (IP or hostname)
 - **MQTT port** (default: 1883)
+- **MQTT topix** (default: pms5003/data)
 - **MQTT username** (optional)
 - **MQTT password** (optional)
 
@@ -176,17 +177,18 @@ To clear all WiF credentials:
 |-----|----------|-------|
 | GPIO16 | PM Sensor RX | UART receive from sensor |
 | GPIO17 | PM Sensor TX | UART transmit to sensor |
-| GPIOx | WiFi erase Button | Active within 20s of boot |
+| GPIOx | Config Button | Active after 10 seconds pressed |
 
 
 ## MQTT Topics
 **Publishes:**
-- `luchtsensor/data` - Measurement data in JSON format
+- `pms5003/data` - Measurement data in JSON format
 
 **Example payload:**
 ```json
 {
-  "deviceId": "LS609c3e08",
+  "devId": "LS609c3e08",
+  "pm1": 7.6,
   "pm25": 8.7,
   "pm10": 12.3,
   "timestamp": 123456
@@ -194,7 +196,8 @@ To clear all WiF credentials:
 ```
 
 **Fields:**
-- `deviceId`: Unique device identifier based on MAC address (format: LS + last 8 hex digits of MAC)
+- `devId`: Unique device identifier based on MAC address (format: LS + last 8 hex digits of MAC)
+- `pm1`: PM1.0 concentration in µg/m³
 - `pm25`: PM2.5 concentration in µg/m³
 - `pm10`: PM10 concentration in µg/m³
 - `timestamp`: Milliseconds since device boot
@@ -214,7 +217,7 @@ To clear all WiF credentials:
 The project uses `platformio.ini`:
 
 - **[env]**: Shared configuration
-- **[env:luchtsensor]**: Air sensor specific settings
+- **[env:mqttAerosolSensor]**: Air sensor specific settings
 
 ### Build Flags
 
