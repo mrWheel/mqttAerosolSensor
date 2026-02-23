@@ -6,9 +6,16 @@ import re
 import shutil
 import shlex
 import subprocess
+import sys
 import os
+import urllib.request
 from pathlib import Path
 
+scriptVersion = "v1.0 (2026-02-23)"
+defaultAwsServer = "admin@aandewiel.nl"
+defaultAwsTarget = "/home/admin/flasherWebsite_v3"
+defaultAwsSshKey = "~/.ssh/LightsailDefaultKey-eu-central-1.pem"
+defaultProjectImageUrl = "https://flasher.aandewiel.nl/projects/ESP32project.png"
 
 versionPattern = re.compile(r"v\d+\.\d+\.\d+")
 envSectionPattern = re.compile(r"^\s*\[\s*env:([^\]]+)\s*\]\s*$")
@@ -165,7 +172,7 @@ def generateFlashJson(
         try:
             partitions = parsePartitionsCsv(partitionsCsvPath)
         except Exception as exc:
-            logLines.append(f"WARN: partitions.csv parse mislukt: {exc}")
+            logLines.append(f"WARN: partitions.csv parse failed: {exc}")
 
     flashFiles: list[dict[str, str]] = []
 
@@ -198,7 +205,7 @@ def generateFlashJson(
             flashFiles.append({"offset": filesystemOffset, "file": filesystemFile})
         else:
             logLines.append(
-                f"WARN: Geen filesystem offset gevonden in partitions.csv voor {filesystemFile}"
+                f"WARN: No filesystem offset found in partitions.csv for {filesystemFile}"
             )
 
     flashPayload = {
@@ -209,16 +216,6 @@ def generateFlashJson(
     (targetVersionDir / "flash.json").write_text(
         json.dumps(flashPayload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
-
-
-def promptProjectPath(initialValue: str | None) -> Path:
-    if initialValue:
-        return Path(initialValue).expanduser().resolve()
-
-    entered = input("Geef pad naar PlatformIO project: ").strip()
-    if not entered:
-        raise SystemExit("Geen pad opgegeven.")
-    return Path(entered).expanduser().resolve()
 
 
 def parseEnvs(platformioIni: Path) -> list[str]:
@@ -322,7 +319,7 @@ def runCommand(cmd: list[str], cwd: Path, logLines: list[str]) -> None:
         logLines.append(process.stderr.rstrip())
     if process.returncode != 0:
         raise RuntimeError(
-            f"Command mislukt ({process.returncode}): {' '.join(cmd)}\n{process.stderr}"
+            f"Command failed ({process.returncode}): {' '.join(cmd)}\n{process.stderr}"
         )
 
 
@@ -346,55 +343,57 @@ def discoverBuildDir(projectRoot: Path, workspaceDir: Path, envName: str) -> Pat
         return fallbackPio
 
     raise RuntimeError(
-        f"Build directory niet gevonden voor env '{envName}' in workspace_dir '{workspaceDir}' of fallback '.pio'."
+        f"Build directory not found for env '{envName}' in workspace_dir '{workspaceDir}' or fallback '.pio'."
     )
 
 
-def findProjectRootPng(projectPath: Path) -> Path | None:
-    pngFiles = sorted(projectPath.glob("*.png"))
-    if not pngFiles:
-        return None
+def ensureProjectMetaDataDefaults(rootDir: Path) -> Path:
+    metaDataDir = rootDir / "projectMetaData"
+    if metaDataDir.exists() and metaDataDir.is_dir():
+        return metaDataDir
 
-    for pngFile in pngFiles:
-        if pngFile.name.lower() == "project.png":
-            return pngFile
+    metaDataDir.mkdir(parents=True, exist_ok=True)
 
-    return pngFiles[0]
+    (metaDataDir / "project_en.md").write_text(
+        "# your_project_name\n\nDiscription in English\n", encoding="utf-8"
+    )
+    (metaDataDir / "project_nl.md").write_text(
+        "# your_project_name\n\nBeschrijving van het project in Dutch\n", encoding="utf-8"
+    )
+
+    payload = {
+        "name": "your_project_name",
+        "long_name_nl": "Langere naam in Dutch",
+        "long_name_en": "longer name in English",
+        "description_en": "Discription in English",
+        "description_nl": "Beschrijving van het project in Dutch",
+        "github_url": "https://github.com/mrWheel/",
+        "post_url": "https://willem.aandewiel.nl/",
+        "image": "thisProject.png",
+    }
+    (metaDataDir / "project.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+
+    targetImage = metaDataDir / "thisProject.png"
+    try:
+        urllib.request.urlretrieve(defaultProjectImageUrl, str(targetImage))
+    except Exception:
+        targetImage.touch()
+
+    return metaDataDir
 
 
-def ensureProjectFiles(projectDir: Path, projectName: str, templateImage: Path | None) -> None:
-    projectJson = projectDir / "project.json"
-    if not projectJson.exists():
-        payload = {
-            "name": projectName,
-            "long_name_nl": projectName,
-            "long_name_en": projectName,
-            "description_en": f"Firmware project for {projectName}",
-            "description_nl": f"Firmware project voor {projectName}",
-            "image": "project.png",
-        }
-        projectJson.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-        )
+def copyProjectMetaData(metaDataDir: Path, targetProjectDir: Path) -> None:
+    for item in sorted(metaDataDir.iterdir()):
+        if not item.is_file():
+            continue
 
-    projectEn = projectDir / "project_en.md"
-    if not projectEn.exists():
-        projectEn.write_text(
-            f"# {projectName}\n\nEnglish project description.\n", encoding="utf-8"
-        )
+        destinationName = item.name
+        if item.name == "ESP32project.png":
+            destinationName = "thisProject.png"
 
-    projectNl = projectDir / "project_nl.md"
-    if not projectNl.exists():
-        projectNl.write_text(
-            f"# {projectName}\n\nNederlandse projectbeschrijving.\n", encoding="utf-8"
-        )
-
-    projectImage = projectDir / "project.png"
-    if not projectImage.exists():
-        if templateImage and templateImage.exists():
-            shutil.copy2(templateImage, projectImage)
-        else:
-            projectImage.touch()
+        shutil.copy2(item, targetProjectDir / destinationName)
 
 
 def copyIfExists(source: Path, destination: Path) -> bool:
@@ -417,7 +416,7 @@ def collectAndCopyArtifacts(
 
     required = buildDir / "firmware.bin"
     if not required.exists():
-        raise RuntimeError(f"firmware.bin niet gevonden voor env '{envName}'")
+        raise RuntimeError(f"firmware.bin not found for env '{envName}'")
 
     shutil.copy2(required, targetVersionDir / "firmware.bin")
 
@@ -465,7 +464,7 @@ def resolveExecutable(commandName: str, preferredPaths: list[str]) -> str:
     if detectedPath:
         return detectedPath
 
-    raise RuntimeError(f"Executable niet gevonden: {commandName}")
+    raise RuntimeError(f"Executable not found: {commandName}")
 
 
 def syncProjectToAws(
@@ -481,7 +480,7 @@ def syncProjectToAws(
 
     sourceProjectPath = projectsRoot / projectName
     if not sourceProjectPath.exists():
-        raise RuntimeError(f"Project map bestaat niet voor sync: {sourceProjectPath}")
+        raise RuntimeError(f"Project directory does not exist for sync: {sourceProjectPath}")
 
     remoteProjectBase = f"{awsTarget.rstrip('/')}/projects"
     remoteProjectPath = f"{remoteProjectBase}/{projectName}"
@@ -500,7 +499,7 @@ def syncProjectToAws(
     mkdirProcess = subprocess.run(mkdirCmd, text=True, capture_output=True)
     if mkdirProcess.returncode != 0:
         raise RuntimeError(
-            f"AWS project map aanmaken mislukt: {mkdirProcess.stderr.strip() or mkdirProcess.stdout.strip()}"
+            f"Failed to create AWS project directory: {mkdirProcess.stderr.strip() or mkdirProcess.stdout.strip()}"
         )
 
     sshRsyncTransport = (
@@ -532,7 +531,7 @@ def syncProjectToAws(
         ]
     )
 
-    print("Start AWS sync van projectmap...")
+    print("Starting AWS sync for project directory...")
     print(f"  Local:  {sourceProjectPath}")
     print(f"  Remote: {awsServer}:{remoteProjectPath}")
     print(f"  SSH key: {awsSshKey}")
@@ -543,71 +542,205 @@ def syncProjectToAws(
     if process.stderr:
         print(process.stderr.strip())
     if process.returncode != 0:
-        raise RuntimeError(f"AWS rsync mislukt met code {process.returncode}")
+        raise RuntimeError(f"AWS rsync failed with code {process.returncode}")
+
+
+def syncProjectsFolderToAws(
+    projectsRoot: Path,
+    awsServer: str,
+    awsTarget: str,
+    awsSshKey: Path,
+    awsDryRun: bool,
+) -> None:
+    rsyncPath = resolveExecutable("rsync", ["/usr/bin/rsync"])
+    sshPath = resolveExecutable("ssh", ["/usr/bin/ssh"])
+
+    if not projectsRoot.exists() or not projectsRoot.is_dir():
+        raise RuntimeError(f"Projects directory does not exist for sync: {projectsRoot}")
+
+    remoteProjectsPath = f"{awsTarget.rstrip('/')}/projects"
+
+    mkdirCmd = [
+        sshPath,
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-i",
+        str(awsSshKey),
+        awsServer,
+        f"mkdir -p {shlex.quote(remoteProjectsPath)}",
+    ]
+    mkdirProcess = subprocess.run(mkdirCmd, text=True, capture_output=True)
+    if mkdirProcess.returncode != 0:
+        raise RuntimeError(
+            f"Failed to create AWS projects directory: {mkdirProcess.stderr.strip() or mkdirProcess.stdout.strip()}"
+        )
+
+    sshRsyncTransport = (
+        f"{sshPath} -o BatchMode=yes -o ConnectTimeout=10 -i {shlex.quote(str(awsSshKey))}"
+    )
+
+    rsyncCmd = [
+        rsyncPath,
+        "-avz",
+        "--update",
+        "-e",
+        sshRsyncTransport,
+        "--exclude",
+        ".DS_Store",
+        "--exclude",
+        "*.tmp",
+        "--exclude",
+        "*.bak",
+        "--exclude",
+        ".venv/",
+    ]
+    if awsDryRun:
+        rsyncCmd.extend(["--dry-run", "--itemize-changes"])
+
+    rsyncCmd.extend(
+        [
+            f"{projectsRoot}/",
+            f"{awsServer}:{remoteProjectsPath}/",
+        ]
+    )
+
+    print("Starting AWS sync for full projects directory...")
+    print(f"  Local:  {projectsRoot}")
+    print(f"  Remote: {awsServer}:{remoteProjectsPath}")
+    print(f"  SSH key: {awsSshKey}")
+    print(f"  Binaries: rsync={rsyncPath}, ssh={sshPath}")
+    process = subprocess.run(rsyncCmd, text=True, capture_output=True)
+    if process.stdout:
+        print(process.stdout.strip())
+    if process.stderr:
+        print(process.stderr.strip())
+    if process.returncode != 0:
+        raise RuntimeError(f"AWS rsync failed with code {process.returncode}")
+
+
+def validateProjectsFolderForAwsSync(projectsRoot: Path) -> None:
+    if not projectsRoot.exists() or not projectsRoot.is_dir():
+        raise RuntimeError(f"Projects directory does not exist: {projectsRoot}")
+
+    projectDirs = sorted([path for path in projectsRoot.iterdir() if path.is_dir()])
+    if not projectDirs:
+        raise RuntimeError(f"Projects directory is empty: {projectsRoot}")
+
+    requiredMetaFiles = ["project.json", "project_en.md", "project_nl.md"]
+    validationErrors: list[str] = []
+
+    for projectDir in projectDirs:
+        for fileName in requiredMetaFiles:
+            if not (projectDir / fileName).is_file():
+                validationErrors.append(
+                    f"{projectDir.name}: missing metadata file '{fileName}'"
+                )
+
+        versionArtifacts = sorted(projectDir.rglob("flash.json"))
+        if not versionArtifacts:
+            validationErrors.append(
+                f"{projectDir.name}: no build output found (flash.json is missing)"
+            )
+            continue
+
+        hasValidArtifactSet = False
+        for flashJsonPath in versionArtifacts:
+            artifactDir = flashJsonPath.parent
+            if (artifactDir / "firmware.bin").is_file():
+                hasValidArtifactSet = True
+                break
+
+        if not hasValidArtifactSet:
+            validationErrors.append(
+                f"{projectDir.name}: invalid build output (firmware.bin is missing next to flash.json)"
+            )
+
+    if validationErrors:
+        errorLines = "\n  - " + "\n  - ".join(validationErrors)
+        raise RuntimeError(
+            "Projects directory is not correctly populated for --only-sync-aws:" + errorLines
+        )
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Maak projects-structuur vanuit PlatformIO project."
+        usage="%(prog)s [platformioProject] [--sync-aws | --only-sync-aws] [--aws-dry-run]",
+        description=f"createProjectStructure.py {scriptVersion}\nCreate projects structure from a PlatformIO project.",
     )
     parser.add_argument(
         "platformioProject",
         nargs="?",
-        help="Pad naar PlatformIO project (als leeg, dan interactieve prompt)",
+        help="Path to PlatformIO project",
     )
-    parser.add_argument(
-        "--output-root",
-        default=None,
-        help="Root waar de map 'projects' staat of aangemaakt wordt (default: platformio project root)",
-    )
-    parser.add_argument(
+    syncModeGroup = parser.add_mutually_exclusive_group()
+    syncModeGroup.add_argument(
         "--sync-aws",
         action="store_true",
-        help="Sync gegenereerde projects/<project> map naar AWS (alleen add/update, nooit delete)",
+        help="Sync generated projects/<project> directory to AWS (add/update only, never delete)",
     )
-    parser.add_argument(
-        "--aws-server",
-        default="admin@aandewiel.nl",
-        help="SSH server voor AWS sync (default: admin@aandewiel.nl)",
-    )
-    parser.add_argument(
-        "--aws-target",
-        default="/home/admin/flasherWebsite_v3",
-        help="Remote root path voor website (default: /home/admin/flasherWebsite_v3)",
-    )
-    parser.add_argument(
-        "--aws-ssh-key",
-        default="~/.ssh/LightsailDefaultKey-eu-central-1.pem",
-        help="Pad naar SSH key voor AWS sync",
+    syncModeGroup.add_argument(
+        "--only-sync-aws",
+        action="store_true",
+        help="Skip build and only sync the full local projects directory to AWS",
     )
     parser.add_argument(
         "--aws-dry-run",
         action="store_true",
-        help="Toon AWS rsync wijzigingen zonder daadwerkelijk te kopiëren",
+        help="Show AWS rsync changes without actually copying",
     )
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return 0
+
     args = parser.parse_args()
+
+    if not args.platformioProject:
+        parser.print_help()
+        return 0
+
+    projectPath = Path(args.platformioProject).expanduser().resolve()
+    if not projectPath.exists() or not projectPath.is_dir():
+        raise SystemExit(f"Invalid project path: {projectPath}")
+
+    outputRoot = projectPath
+    projectsRoot = outputRoot / "projects"
+
+    if args.only_sync_aws:
+        awsSshKey = Path(defaultAwsSshKey).expanduser().resolve()
+        if not awsSshKey.exists():
+            raise SystemExit(f"SSH key not found: {awsSshKey}")
+        print(f"Validating projects directory: {projectsRoot}")
+        validateProjectsFolderForAwsSync(projectsRoot)
+        syncProjectsFolderToAws(
+            projectsRoot=projectsRoot,
+            awsServer=defaultAwsServer,
+            awsTarget=defaultAwsTarget,
+            awsSshKey=awsSshKey,
+            awsDryRun=args.aws_dry_run,
+        )
+        print("Projects directory synchronized successfully.")
+        return 0
 
     if shutil.which("pio") is None:
         raise SystemExit(
-            "PlatformIO CLI niet gevonden. Installeer PlatformIO Core en zorg dat 'pio' in PATH staat."
+            "PlatformIO CLI not found. Install PlatformIO Core and ensure 'pio' is in PATH."
         )
-
-    projectPath = promptProjectPath(args.platformioProject)
-    if not projectPath.exists() or not projectPath.is_dir():
-        raise SystemExit(f"Ongeldig projectpad: {projectPath}")
 
     os.chdir(projectPath)
 
     platformioIni = projectPath / "platformio.ini"
     if not platformioIni.exists():
-        raise SystemExit(f"platformio.ini niet gevonden in: {projectPath}")
+        raise SystemExit(f"platformio.ini not found in: {projectPath}")
 
     workspaceDir = getWorkspaceDir(platformioIni, projectPath)
     platformioSections = parsePlatformioSections(platformioIni)
 
     envs = parseEnvs(platformioIni)
     if not envs:
-        raise SystemExit("Geen [env:...] secties gevonden in platformio.ini")
+        raise SystemExit("No [env:...] sections found in platformio.ini")
 
     envBoardMap: dict[str, str] = {}
     boardCounts: dict[str, int] = {}
@@ -619,24 +752,20 @@ def main() -> int:
     version = detectVersion(projectPath / "src")
     projectName = projectPath.name
 
-    if args.output_root:
-        outputRoot = Path(args.output_root).expanduser().resolve()
-    else:
-        outputRoot = projectPath
-    projectsRoot = outputRoot / "projects"
     targetProjectDir = projectsRoot / projectName
     if targetProjectDir.exists():
-        print(f"Bestaande projectmap verwijderen: {targetProjectDir}")
+        print(f"Removing existing project directory: {targetProjectDir}")
         shutil.rmtree(targetProjectDir)
     targetProjectDir.mkdir(parents=True, exist_ok=True)
 
-    templateImage = findProjectRootPng(projectPath)
-    ensureProjectFiles(targetProjectDir, projectName, templateImage)
+    projectMetaDataDir = ensureProjectMetaDataDefaults(projectPath)
+    copyProjectMetaData(projectMetaDataDir, targetProjectDir)
 
+    print(f"createProjectStructure.py {scriptVersion}")
     print(f"Project: {projectName}")
-    print(f"Versie: {version}")
+    print(f"Version: {version}")
     print(f"Environments: {', '.join(envs)}")
-    print("Boards per env:")
+    print("Boards per environment:")
     for env in envs:
         print(f"  - {env} -> {envBoardMap[env]}")
     print(f"Output: {targetProjectDir}")
@@ -670,22 +799,22 @@ def main() -> int:
             version,
             logLines,
         )
-        print(f"Klaar voor env '{env}': {envVersionDir}")
+        print(f"Completed for env '{env}': {envVersionDir}")
 
     if args.sync_aws:
-        awsSshKey = Path(args.aws_ssh_key).expanduser().resolve()
+        awsSshKey = Path(defaultAwsSshKey).expanduser().resolve()
         if not awsSshKey.exists():
-            raise SystemExit(f"SSH key niet gevonden: {awsSshKey}")
+            raise SystemExit(f"SSH key not found: {awsSshKey}")
         syncProjectToAws(
             projectsRoot=projectsRoot,
             projectName=projectName,
-            awsServer=args.aws_server,
-            awsTarget=args.aws_target,
+            awsServer=defaultAwsServer,
+            awsTarget=defaultAwsTarget,
             awsSshKey=awsSshKey,
             awsDryRun=args.aws_dry_run,
         )
 
-    print("Structuur succesvol aangemaakt.")
+    print("Structure created successfully.")
     return 0
 
 
@@ -693,5 +822,5 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:
-        raise SystemExit("Afgebroken door gebruiker.")
+        raise SystemExit("Aborted by user.")
     

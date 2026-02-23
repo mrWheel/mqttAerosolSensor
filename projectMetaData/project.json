@@ -1,0 +1,10 @@
+{
+  "name": "mqttAerosolSensor",
+  "long_name_nl": "mqttAerosolSensor",
+  "long_name_en": "mqttAerosolSensor",
+  "description_en": "Firmware project for mqttAerosolSensor",
+  "description_nl": "Firmware project voor mqttAerosolSensor",
+  "github_url": "https://github.com/mrWheel/mqttAerosolSensor",
+  "post_url": "https://willem.aandewiel.nl/index.php/2026/02/20/measuring-fine-dust-for-makers-esp32-pms5003/",
+  "image": "mqttAerosolSensor.png"
+}
